@@ -2412,6 +2412,262 @@ let fontSize = null
 /** @type {Map<string, import("./types").Disconnectable>} */
 let globalObservers = new Map()
 
+//#region Keyboard navigation
+/** @typedef {{$container: Element, rows: Element[], tweets: HTMLElement[]}} KeyboardTimelineState */
+/**
+ * @typedef {Object} KeyboardNavigationStart
+ * @property {'j' | 'k'} key
+ * @property {string} code
+ * @property {number} keyCode
+ * @property {number} which
+ * @property {number} charCode
+ * @property {number} location
+ * @property {boolean} repeat
+ * @property {HTMLElement} activeTweet
+ * @property {Element} activeElement
+ * @property {KeyboardTimelineState} timeline
+ * @property {number} tweetIndex
+ * @property {string} pagePath
+ * @property {string} urlPath
+ * @property {number} scrollX
+ * @property {number} scrollY
+ */
+const KEYBOARD_NAVIGATION_OBSERVER = 'keyboard navigation'
+let keyboardNavigationFrame = null
+let keyboardNavigationGeneration = 0
+let keyboardNavigationSyntheticDepth = 0
+
+function cancelPendingKeyboardNavigation() {
+  keyboardNavigationGeneration++
+  if (keyboardNavigationFrame != null) {
+    cancelAnimationFrame(keyboardNavigationFrame)
+    keyboardNavigationFrame = null
+  }
+}
+
+/**
+ * @param {HTMLElement} $tweet
+ * @returns {?KeyboardTimelineState}
+ */
+function getKeyboardTimelineState($tweet) {
+  let $row = $tweet.closest('[data-testid="cellInnerDiv"]')
+  let $container = $row?.parentElement
+  if (!$row || !$container) return null
+
+  let rows = Array.from($container.children)
+  let tweets = []
+  for (let $item of rows) {
+    let $itemTweet = /** @type {?HTMLElement} */ ($item.querySelector(Selectors.TWEET))
+    if ($itemTweet) tweets.push($itemTweet)
+  }
+  if (!tweets.includes($tweet)) return null
+  return {$container, rows, tweets}
+}
+
+/** @param {?HTMLElement} $tweet */
+function isKeyboardTweetHidden($tweet) {
+  return Boolean($tweet?.closest('.HiddenTweet, .HiddenAd'))
+}
+
+/**
+ * @param {EventTarget | null} $target
+ * @returns {boolean}
+ */
+function isUnsafeKeyboardNavigationElement($target) {
+  if (!($target instanceof Element) || !$target.isConnected) return true
+  let isContentEditable = $target instanceof HTMLElement && $target.isContentEditable
+  return isContentEditable || Boolean(
+    $target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], [role="dialog"], [aria-modal="true"]')
+  )
+}
+
+/**
+ * @param {?KeyboardTimelineState} state
+ * @param {KeyboardNavigationStart} start
+ */
+function isSameKeyboardTimelineState(state, start) {
+  return state != null &&
+    state.$container === start.timeline.$container &&
+    state.rows.length === start.timeline.rows.length &&
+    state.rows.every(($row, index) => $row === start.timeline.rows[index]) &&
+    state.tweets.length === start.timeline.tweets.length &&
+    state.tweets.every(($tweet, index) => $tweet === start.timeline.tweets[index])
+}
+
+/** @param {KeyboardNavigationStart} start */
+function canContinueKeyboardNavigation(start) {
+  if (!config.enabled || !desktop || currentPagePath != start.pagePath || location.pathname != start.urlPath) {
+    return false
+  }
+  let route = getCurrentRoute()
+  return !route.isModal && route.pagePath == start.pagePath && route.urlPath == start.urlPath
+}
+
+/**
+ * @param {KeyboardEvent} event
+ * @param {KeyboardNavigationStart} start
+ * @param {number} generation
+ */
+function processKeyboardNavigationKeypress(event, start, generation) {
+  let $target = event.target
+  if (generation !== keyboardNavigationGeneration || !canContinueKeyboardNavigation(start) ||
+      !($target instanceof Element) || isUnsafeKeyboardNavigationElement($target) ||
+      isUnsafeKeyboardNavigationElement(document.activeElement)) return
+
+  let $activeTweet = /** @type {?HTMLElement} */ (document.activeElement.closest(Selectors.TWEET))
+  let timeline = $activeTweet && getKeyboardTimelineState($activeTweet)
+  if ($activeTweet !== start.activeTweet || document.activeElement !== start.activeElement ||
+      !isSameKeyboardTimelineState(timeline, start)) return
+
+  let direction = start.key == 'j' ? 1 : -1
+  let candidateIndex = start.tweetIndex + direction
+  let consecutiveHiddenCount = 0
+  while (candidateIndex >= 0 && candidateIndex < timeline.tweets.length &&
+      isKeyboardTweetHidden(timeline.tweets[candidateIndex])) {
+    consecutiveHiddenCount++
+    candidateIndex += direction
+  }
+  if (consecutiveHiddenCount == 0) return
+
+  // Replay X's keypress handler so its navigation cursor advances with focus.
+  // Doing this after the hidden-row attempt, before the next paint, avoids a visible pause.
+  let retries = 0
+  let moved = false
+  let uncertain = false
+  candidateIndex = start.tweetIndex + direction
+  let maxRetries = consecutiveHiddenCount + 1
+  while (retries < maxRetries && isKeyboardTweetHidden(timeline.tweets[candidateIndex])) {
+    if (generation !== keyboardNavigationGeneration || !canContinueKeyboardNavigation(start) ||
+        isUnsafeKeyboardNavigationElement($target) || isUnsafeKeyboardNavigationElement(document.activeElement) ||
+        document.activeElement !== start.activeElement) {
+      uncertain = true
+      break
+    }
+    let currentTweet = /** @type {?HTMLElement} */ (document.activeElement.closest(Selectors.TWEET))
+    if (currentTweet !== start.activeTweet ||
+        !isSameKeyboardTimelineState(getKeyboardTimelineState(currentTweet), start)) {
+      uncertain = true
+      break
+    }
+
+    // Restore X's failed header-offset scroll before asking its cursor to skip the next row.
+    if (window.scrollX != start.scrollX || window.scrollY != start.scrollY) {
+      window.scrollTo(start.scrollX, start.scrollY)
+    }
+    let characterCode = start.key == 'j' ? 106 : 107
+    let replay = new KeyboardEvent('keypress', {
+      key: start.key,
+      code: start.code,
+      keyCode: start.keyCode || start.which || start.charCode || characterCode,
+      which: start.which || start.charCode || start.keyCode || characterCode,
+      charCode: start.charCode || start.which || characterCode,
+      location: start.location,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      repeat: start.repeat,
+    })
+    keyboardNavigationSyntheticDepth++
+    try {
+      $target.dispatchEvent(replay)
+    } finally {
+      keyboardNavigationSyntheticDepth--
+    }
+    retries++
+
+    let $nextActiveTweet = /** @type {?HTMLElement} */ (document.activeElement.closest(Selectors.TWEET))
+    let nextTimeline = $nextActiveTweet && getKeyboardTimelineState($nextActiveTweet)
+    if (!isSameKeyboardTimelineState(nextTimeline, start)) {
+      uncertain = true
+      break
+    }
+    if ($nextActiveTweet !== start.activeTweet) {
+      moved = !isKeyboardTweetHidden($nextActiveTweet)
+      if (!moved) uncertain = true
+      break
+    }
+    if (document.activeElement !== start.activeElement ||
+        isUnsafeKeyboardNavigationElement(document.activeElement)) {
+      uncertain = true
+      break
+    }
+    candidateIndex += direction
+  }
+
+  if (!moved && !uncertain && (window.scrollX != start.scrollX || window.scrollY != start.scrollY)) {
+    window.scrollTo(start.scrollX, start.scrollY)
+  }
+}
+
+/** @param {KeyboardEvent} event */
+function onKeyboardNavigationKeypress(event) {
+  if (keyboardNavigationSyntheticDepth || !config.enabled || !desktop || !currentPagePath ||
+      event.type != 'keypress' || !event.isTrusted || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
+      isUnsafeKeyboardNavigationElement(event.target) ||
+      isUnsafeKeyboardNavigationElement(document.activeElement)) return
+  let key = event.key?.toLowerCase()
+  if (key !== 'j' && key !== 'k') return
+
+  let $activeTweet = /** @type {?HTMLElement} */ (document.activeElement.closest(Selectors.TWEET))
+  let timeline = $activeTweet && getKeyboardTimelineState($activeTweet)
+  let route = getCurrentRoute()
+  if (!$activeTweet || !timeline || route.isModal || route.pagePath != currentPagePath || route.urlPath != location.pathname) return
+  let tweetIndex = timeline.tweets.indexOf($activeTweet)
+  if (tweetIndex < 0) return
+
+  cancelPendingKeyboardNavigation()
+  let generation = keyboardNavigationGeneration
+  let start = /** @type {KeyboardNavigationStart} */ ({
+    key,
+    code: event.code,
+    keyCode: event.keyCode,
+    which: event.which,
+    charCode: event.charCode,
+    location: event.location,
+    repeat: Boolean(event.repeat),
+    activeTweet: $activeTweet,
+    activeElement: document.activeElement,
+    timeline,
+    tweetIndex,
+    pagePath: currentPagePath,
+    urlPath: location.pathname,
+    scrollX: window.scrollX,
+    scrollY: window.scrollY,
+  })
+  let frame = requestAnimationFrame(() => {
+    if (keyboardNavigationFrame === frame) keyboardNavigationFrame = null
+    processKeyboardNavigationKeypress(event, start, generation)
+  })
+  keyboardNavigationFrame = frame
+}
+
+function configureKeyboardNavigation() {
+  let registration = globalObservers.get(KEYBOARD_NAVIGATION_OBSERVER)
+  if (!config.enabled || !desktop) {
+    registration?.disconnect()
+    return
+  }
+  if (registration) return
+
+  document.addEventListener('keypress', onKeyboardNavigationKeypress, true)
+  let connected = true
+  /** @type {import("./types").Disconnectable} */
+  let observer = {
+    name: KEYBOARD_NAVIGATION_OBSERVER,
+    disconnect() {
+      if (!connected) return
+      connected = false
+      document.removeEventListener('keypress', onKeyboardNavigationKeypress, true)
+      cancelPendingKeyboardNavigation()
+      if (globalObservers.get(KEYBOARD_NAVIGATION_OBSERVER) === observer) {
+        globalObservers.delete(KEYBOARD_NAVIGATION_OBSERVER)
+      }
+    },
+  }
+  globalObservers.set(KEYBOARD_NAVIGATION_OBSERVER, observer)
+}
+//#endregion Keyboard navigation
+
 /** Set to `true` when a Home/Following heading or Home nav link is used. */
 let homeNavigationIsBeingUsed = false
 
@@ -6631,6 +6887,9 @@ function onTitleChange(title) {
   }
 
   let route = getCurrentRoute()
+  if (route.urlPath != lastUrlPath || route.pagePath != currentPagePath) {
+    cancelPendingKeyboardNavigation()
+  }
 
   // Ignore Flash of Uninitialised Title when navigating to a page for the first
   // time, except on pages we've identified as not setting a title, including
@@ -6787,6 +7046,9 @@ function processTwitterLogos($el) {
 function processCurrentPage(route = getCurrentRoute()) {
   // Startup can re-render before the initial page title has been handled
   if (!lastUrlPath) return
+  if (route.urlPath != lastUrlPath || route.pagePath != currentPagePath) {
+    cancelPendingKeyboardNavigation()
+  }
   disconnectObservers(pageObservers, 'page')
   currentPagePath = route.pagePath
 
@@ -8091,6 +8353,7 @@ async function main({processImmediately = false} = {}) {
 
     mobile = flexDirection == 'column'
     desktop = !mobile
+    configureKeyboardNavigation()
 
     /** @type {'mobile' | 'desktop'} */
     let version = mobile ? 'mobile' : 'desktop'
