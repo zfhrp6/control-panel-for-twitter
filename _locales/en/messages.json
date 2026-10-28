@@ -21,6 +21,9 @@
   "bypassAgeVerificationLabel": {
     "message": "Bypass age verification"
   },
+  "compactLinkPreviewsLabel": {
+    "message": "Compact external link previews"
+  },
   "customCssLabel": {
     "message": "Custom CSS"
   },

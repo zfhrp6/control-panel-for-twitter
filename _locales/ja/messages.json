@@ -20,6 +20,9 @@
   "bypassAgeVerificationLabel": {
     "message": "年齢確認をバイパス"
   },
+  "compactLinkPreviewsLabel": {
+    "message": "外部リンクをコンパクトに表示"
+  },
   "customCssLabel": {
     "message": "カスタムCSS"
   },

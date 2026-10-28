@@ -126,6 +126,7 @@ const config = {
   addFocusedTweetAccountLocation: false,
   alwaysUseLatestTweets: true,
   bypassAgeVerification: true,
+  compactLinkPreviews: false,
   darkModeTheme: 'lightsOut',
   defaultToLatestSearch: false,
   disableHomeTimeline: false,
@@ -5032,15 +5033,109 @@ const configureCss = (() => {
         'body.Tweet [data-testid="tweet"] + div > div [role="group"]',
       )
     }
-    if (config.restoreLinkHeadlines) {
+    if (config.compactLinkPreviews) {
+      cssRules.push(`
+        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: stretch;
+          gap: 12px;
+          width: 100%;
+          min-width: 0;
+          direction: ltr;
+        }
+        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child {
+          flex: 0 0 80px;
+          display: block !important;
+          position: relative !important;
+          width: 80px !important;
+          height: 80px !important;
+          min-width: 80px;
+          max-width: 80px;
+          aspect-ratio: auto !important;
+          padding: 0 !important;
+          overflow: hidden;
+        }
+        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child > div[style*="padding-bottom"] {
+          display: none !important;
+        }
+        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child > div:nth-child(2) {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100%;
+          height: 100%;
+        }
+        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child img {
+          position: absolute;
+          inset: 0;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover;
+          object-position: center;
+        }
+        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child [style*="background-image"] {
+          background-size: cover !important;
+          background-position: center !important;
+        }
+        div[data-testid="card.layoutLarge.media"]:dir(rtl):has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline {
+          direction: rtl;
+        }
+        .cpft_link_headline[hidden] {
+          display: flex !important;
+          flex: 1 1 auto;
+          flex-direction: column;
+          justify-content: center;
+          gap: 4px;
+          min-width: 0;
+          padding: 8px 12px;
+          line-height: normal;
+        }
+        .cpft_link_title {
+          display: -webkit-box;
+          overflow: hidden;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+        }
+        .cpft_link_description {
+          position: static !important;
+          display: block;
+          overflow: hidden;
+          max-height: 2.6em;
+          line-height: 1.3em;
+        }
+        .cpft_link_site {
+          overflow: hidden;
+          color: var(--cpft-text-secondary);
+          font-size: 12px;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      `)
+    }
+    else if (config.restoreLinkHeadlines) {
       cssRules.push(`
         .cpft_link_headline[hidden] {
-          display: block;
+          display: flex;
+          flex-direction: column-reverse;
+          gap: 0;
           border-top: 1px solid var(--cpft-border);
           padding: 14px;
           line-height: normal;
         }
+        .cpft_link_title {
+          display: block;
+          overflow: visible;
+        }
+        .cpft_link_description {
+          display: none;
+        }
+        .cpft_link_site {
+          margin-bottom: 2px;
+          color: var(--cpft-text-secondary);
+        }
       `)
+    }
+    if (config.compactLinkPreviews || config.restoreLinkHeadlines) {
       hideCssSelectors.push(
         // Existing headline overlaid on the card
         '.cpft_overlay_headline',
@@ -6491,7 +6586,7 @@ function onTimelineChange($timeline, page, options = {}) {
         }
       }
 
-      if (!hideItem && config.restoreLinkHeadlines) {
+      if (!hideItem && (config.restoreLinkHeadlines || config.compactLinkPreviews)) {
         restoreLinkHeadline($tweet)
       }
     }
@@ -6729,7 +6824,7 @@ function onIndividualTweetTimelineChange($timeline, options) {
         }
       }
 
-      if (!hideItem && config.restoreLinkHeadlines) {
+      if (!hideItem && (config.restoreLinkHeadlines || config.compactLinkPreviews)) {
         restoreLinkHeadline($tweet)
       }
     }
@@ -7194,11 +7289,37 @@ function restoreLinkHeadline($tweet) {
   if ($link && !$link.dataset.headlineRestored) {
     let [site, ...rest] = $link.getAttribute('aria-label').split(' ')
     let headline = rest.join(' ')
-    $link.lastElementChild?.classList.add('cpft_overlay_headline')
-    $link.insertAdjacentHTML('beforeend', `<div class="cpft_link_headline ${fontFamilyRule?.selectorText?.replace('.', '') || 'cpft_font_family'}" hidden>
-      <div style="color: var(--cpft-text-secondary); margin-bottom: 2px;">${site}</div>
-      <div style="color: var(--cpft-text-primary)">${headline}</div>
-    </div>`)
+    let $existingHeadline = $link.lastElementChild
+    let $media = $link.firstElementChild
+    let $panel = document.createElement('div')
+    $panel.className = `cpft_link_headline ${fontFamilyRule?.selectorText?.replace('.', '') || 'cpft_font_family'}`
+    $panel.hidden = true
+
+    let $title = document.createElement('div')
+    $title.className = 'cpft_link_title'
+    $title.style.color = 'var(--cpft-text-primary)'
+    $title.textContent = headline
+    $panel.appendChild($title)
+
+    if ($existingHeadline && $existingHeadline !== $media) {
+      let existingText = $existingHeadline.textContent.trim().replace(/\s+/g, ' ')
+      let normalizedHeadline = headline.trim().replace(/\s+/g, ' ')
+      if (existingText && existingText !== normalizedHeadline) {
+        let $description = document.createElement('div')
+        $description.className = 'cpft_link_description'
+        $description.textContent = existingText
+        $panel.appendChild($description)
+      }
+      // Keep X's node in place so removing this stylesheet restores its original text.
+      $existingHeadline.classList.add('cpft_overlay_headline')
+    }
+
+    let $site = document.createElement('div')
+    $site.className = 'cpft_link_site'
+    $site.style.color = 'var(--cpft-text-secondary)'
+    $site.textContent = site
+    $panel.appendChild($site)
+    $link.appendChild($panel)
     $link.dataset.headlineRestored = 'true'
   }
 }
@@ -7433,7 +7554,7 @@ function tweakChatPage() {
 }
 
 async function tweakHistoryPage() {
-  if (config.twitterBlueChecks != 'ignore' || config.restoreLinkHeadlines) {
+  if (config.twitterBlueChecks != 'ignore' || config.restoreLinkHeadlines || config.compactLinkPreviews) {
     observeTimeline(currentPage)
   }
 }
