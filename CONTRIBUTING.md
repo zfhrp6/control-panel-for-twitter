@@ -1,5 +1,9 @@
 # Development of Control Panel for Twitter
 
+## Custom browser builds
+
+To update the Chrome/Firefox MV2 and MV3 builds on a custom branch, run `npm run release -- custom`. Starting from a three-part version such as `4.25.1`, this sets manifest `version` to `4.25.1.1` and `version_name` to `4.25.1-custom.1`; each later run increments the final number. The options page and exported config filename use the matching display version. This command does not update Safari's native project because it only versions the browser extension manifests and options page.
+
 ## Debug mode
 
 To enable debug mode, you can either manually set `debug = true` at the top of `script.js`, or open the options page and click the version number at the bottom 5 times to view debug options, where you can enable debug mode.
