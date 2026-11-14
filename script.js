@@ -4577,10 +4577,120 @@ function interceptMediaButton() {
 //#endregion
 
 //#region CSS
+const LINK_PREVIEW_CSS = `
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"] > a.cpft_link_card {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    direction: ltr;
+  }
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"] > a.cpft_link_card > div:first-child {
+    flex: 0 0 80px;
+    display: block !important;
+    position: relative !important;
+    width: 80px !important;
+    height: 80px !important;
+    min-width: 80px;
+    max-width: 80px;
+    aspect-ratio: auto !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"] > a.cpft_link_card > div:first-child > div[style*="padding-bottom"] {
+    display: none !important;
+  }
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"] > a.cpft_link_card > div:first-child > div:nth-child(2) {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100%;
+    height: 100%;
+  }
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"] > a.cpft_link_card > div:first-child img {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    object-position: center;
+  }
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"] > a.cpft_link_card > div:first-child [style*="background-image"] {
+    background-size: cover !important;
+    background-position: center !important;
+  }
+  body.cpftCompactLinkPreviews div[data-testid="card.layoutLarge.media"]:dir(rtl) > a.cpft_link_card > .cpft_link_headline {
+    direction: rtl;
+  }
+  body.cpftCompactLinkPreviews .cpft_link_headline[hidden] {
+    display: flex !important;
+    flex: 1 1 auto;
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 8px 12px;
+    line-height: normal;
+  }
+  body.cpftCompactLinkPreviews .cpft_link_title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  body.cpftCompactLinkPreviews .cpft_link_description {
+    position: static !important;
+    display: block;
+    overflow: hidden;
+    max-height: 2.6em;
+    line-height: 1.3em;
+  }
+  body.cpftCompactLinkPreviews .cpft_link_site {
+    overflow: hidden;
+    color: var(--cpft-text-secondary);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  body.cpftRestoreLinkHeadlines:not(.cpftCompactLinkPreviews) .cpft_link_headline[hidden] {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 0;
+    border-top: 1px solid var(--cpft-border);
+    padding: 14px;
+    line-height: normal;
+  }
+  body.cpftRestoreLinkHeadlines:not(.cpftCompactLinkPreviews) .cpft_link_title {
+    display: block;
+    overflow: visible;
+  }
+  body.cpftRestoreLinkHeadlines:not(.cpftCompactLinkPreviews) .cpft_link_description {
+    display: none;
+  }
+  body.cpftRestoreLinkHeadlines:not(.cpftCompactLinkPreviews) .cpft_link_site {
+    margin-bottom: 2px;
+    color: var(--cpft-text-secondary);
+  }
+  body:is(.cpftCompactLinkPreviews, .cpftRestoreLinkHeadlines) .cpft_overlay_headline,
+  body:is(.cpftCompactLinkPreviews, .cpftRestoreLinkHeadlines) div[data-testid="card.wrapper"] + div {
+    display: none !important;
+  }
+`
+
+function configureLinkPreviewClasses() {
+  // Settings can change while main() waits for the app wrapper; its initial configureCss() reapplies these classes once the body exists.
+  let $root = document.body
+  $root?.classList.toggle('cpftCompactLinkPreviews', config.enabled && config.compactLinkPreviews)
+  $root?.classList.toggle('cpftRestoreLinkHeadlines', config.enabled && config.restoreLinkHeadlines)
+}
+
 const configureCss = (() => {
   let $style
 
   return function configureCss() {
+    configureLinkPreviewClasses()
+
     if (!config.enabled) {
       log('removing main stylesheet')
       $style?.remove()
@@ -4588,7 +4698,7 @@ const configureCss = (() => {
       return
     }
 
-    let cssRules = [`
+    let cssRules = [LINK_PREVIEW_CSS, `
       .cpft_font_family, .cpft_text {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
@@ -5031,116 +5141,6 @@ const configureCss = (() => {
       hideCssSelectors.push(
         '[data-testid="tweet"] [role="group"]',
         'body.Tweet [data-testid="tweet"] + div > div [role="group"]',
-      )
-    }
-    if (config.compactLinkPreviews) {
-      cssRules.push(`
-        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) {
-          display: flex !important;
-          flex-direction: row !important;
-          align-items: stretch;
-          gap: 12px;
-          width: 100%;
-          min-width: 0;
-          direction: ltr;
-        }
-        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child {
-          flex: 0 0 80px;
-          display: block !important;
-          position: relative !important;
-          width: 80px !important;
-          height: 80px !important;
-          min-width: 80px;
-          max-width: 80px;
-          aspect-ratio: auto !important;
-          padding: 0 !important;
-          overflow: hidden;
-        }
-        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child > div[style*="padding-bottom"] {
-          display: none !important;
-        }
-        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child > div:nth-child(2) {
-          position: absolute !important;
-          inset: 0 !important;
-          width: 100%;
-          height: 100%;
-        }
-        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child img {
-          position: absolute;
-          inset: 0;
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover;
-          object-position: center;
-        }
-        div[data-testid="card.layoutLarge.media"]:has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > div:first-child [style*="background-image"] {
-          background-size: cover !important;
-          background-position: center !important;
-        }
-        div[data-testid="card.layoutLarge.media"]:dir(rtl):has(> a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline) > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"]) > .cpft_link_headline {
-          direction: rtl;
-        }
-        .cpft_link_headline[hidden] {
-          display: flex !important;
-          flex: 1 1 auto;
-          flex-direction: column;
-          justify-content: center;
-          gap: 4px;
-          min-width: 0;
-          padding: 8px 12px;
-          line-height: normal;
-        }
-        .cpft_link_title {
-          display: -webkit-box;
-          overflow: hidden;
-          -webkit-box-orient: vertical;
-          -webkit-line-clamp: 2;
-        }
-        .cpft_link_description {
-          position: static !important;
-          display: block;
-          overflow: hidden;
-          max-height: 2.6em;
-          line-height: 1.3em;
-        }
-        .cpft_link_site {
-          overflow: hidden;
-          color: var(--cpft-text-secondary);
-          font-size: 12px;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-      `)
-    }
-    else if (config.restoreLinkHeadlines) {
-      cssRules.push(`
-        .cpft_link_headline[hidden] {
-          display: flex;
-          flex-direction: column-reverse;
-          gap: 0;
-          border-top: 1px solid var(--cpft-border);
-          padding: 14px;
-          line-height: normal;
-        }
-        .cpft_link_title {
-          display: block;
-          overflow: visible;
-        }
-        .cpft_link_description {
-          display: none;
-        }
-        .cpft_link_site {
-          margin-bottom: 2px;
-          color: var(--cpft-text-secondary);
-        }
-      `)
-    }
-    if (config.compactLinkPreviews || config.restoreLinkHeadlines) {
-      hideCssSelectors.push(
-        // Existing headline overlaid on the card
-        '.cpft_overlay_headline',
-        // From <domain> link after the card
-        'div[data-testid="card.wrapper"] + div',
       )
     }
     if (config.restoreQuoteTweetsLink || config.restoreOtherInteractionLinks) {
@@ -7286,6 +7286,7 @@ function restoreLinkHeadline($tweet) {
     // Exclude Install button cards in Grok tweets
     'div[data-testid="card.layoutLarge.media"] > a[rel][aria-label]:not([href="https://itunes.apple.com/app/id6670324846"])'
   ))
+  $link?.classList.add('cpft_link_card')
   if ($link && !$link.dataset.headlineRestored) {
     let [site, ...rest] = $link.getAttribute('aria-label').split(' ')
     let headline = rest.join(' ')
